@@ -1,109 +1,165 @@
-import { StyleSheet, Image, Platform } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  FlatList,
+  Image,
+  Text,
+  ActivityIndicator,
+} from "react-native";
+import { useState, useEffect } from "react";
+import axios from "axios";
 
-import { Collapsible } from '@/components/Collapsible';
-import { ExternalLink } from '@/components/ExternalLink';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
+// Define types for our data
+interface Restaurant {
+  id: string;
+  name: string;
+  address: string;
+  rating: number | null;
+  user_ratings_total: number | null;
+  icon_url: string;
+  price_level: number | null;
+}
+
+interface ApiResponse {
+  restaurants: Restaurant[];
+  currentPage: number;
+  totalPages: number;
+  totalRestaurants: number;
+}
 
 export default function TabTwoScreen() {
+  const [data, setData] = useState<ApiResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const apiURL = "https://api.dinver.eu/api/app/restaurants/sample";
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(apiURL);
+      console.log(response.data);
+      setData(response.data);
+    } catch (error: any) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const renderRestaurantItem = ({ item }: { item: Restaurant }) => (
+    <View style={styles.restaurantItem}>
+      <Image source={{ uri: item.icon_url }} style={styles.restaurantImage} />
+      <View style={styles.restaurantInfo}>
+        <Text style={styles.restaurantName}>{item.name}</Text>
+        <Text style={styles.restaurantAddress}>{item.address}</Text>
+        <View style={styles.ratingContainer}>
+          {item.rating && <Text style={styles.rating}>⭐ {item.rating}</Text>}
+          {item.user_ratings_total && (
+            <Text style={styles.ratingCount}>
+              ({item.user_ratings_total} reviews)
+            </Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
+    <View style={styles.container}>
+      {loading ? (
+        <ActivityIndicator size="large" color="#0000ff" />
+      ) : data ? (
+        <FlatList
+          data={data.restaurants}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRestaurantItem}
+          ListHeaderComponent={
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Restaurants</Text>
+              <Text style={styles.headerSubtitle}>
+                Showing {data.restaurants.length} of {data.totalRestaurants}{" "}
+                restaurants
+              </Text>
+            </View>
+          }
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
-            custom fonts such as this one.
-          </ThemedText>
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user's current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+      ) : (
+        <Text style={styles.errorText}>Failed to load restaurants</Text>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: "#f5f5f5",
   },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
+  header: {
+    marginBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 8,
+  },
+  restaurantItem: {
+    flexDirection: "row",
+    backgroundColor: "white",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  restaurantImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  restaurantInfo: {
+    flex: 1,
+    justifyContent: "space-between",
+  },
+  restaurantName: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  restaurantAddress: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 8,
+  },
+  ratingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  rating: {
+    fontSize: 14,
+    fontWeight: "bold",
+    marginRight: 4,
+  },
+  ratingCount: {
+    fontSize: 12,
+    color: "#666",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "red",
+    textAlign: "center",
   },
 });
