@@ -1,137 +1,85 @@
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
   FlatList,
-  Image,
   Text,
   ActivityIndicator,
   TouchableOpacity,
 } from "react-native";
-import { useState, useEffect } from "react";
-import axios from "axios";
 import { Ionicons } from "@expo/vector-icons";
 import SearchBar from "../components/SearchBar";
+import RestaurantItem from "../components/RestaurantItem";
+import PaginationControls from "../components/PaginationControls";
+import {
+  fetchRestaurants,
+  ApiResponse,
+  Restaurant,
+} from "../services/restaurantService";
 
-interface Restaurant {
-  id: string;
-  name: string;
-  address: string;
-  rating: number | null;
-  user_ratings_total: number | null;
-  icon_url: string;
-  price_level: number | null;
-}
-
-interface ApiResponse {
-  restaurants: Restaurant[];
-  currentPage: number;
-  totalPages: number;
-  totalRestaurants: number;
-}
-
-const RestaurantItem = ({ item }: { item: Restaurant }) => (
-  <View style={styles.restaurantItem}>
-    <Image source={{ uri: item.icon_url }} style={styles.restaurantImage} />
-    <View style={styles.restaurantInfo}>
-      <Text style={styles.restaurantName}>{item.name}</Text>
-      <Text style={styles.restaurantAddress}>{item.address}</Text>
-      <View style={styles.ratingContainer}>
-        {item.rating && <Text style={styles.rating}>Ratings: {item.rating}</Text>}
-        {item.user_ratings_total && (
-          <Text style={styles.ratingCount}>
-            ({item.user_ratings_total} reviews)
-          </Text>
-        )}
-      </View>
-    </View>
-  </View>
-);
-
-interface PaginationControlsProps {
-  currentPage: number;
-  totalPages: number;
-  onPrevious: () => void;
-  onNext: () => void;
-}
-
-const PaginationControls = ({
-  currentPage,
-  totalPages,
-  onPrevious,
-  onNext,
-}: PaginationControlsProps) => {
-  return (
-    <View style={styles.paginationContainer}>
-      <TouchableOpacity
-        style={[
-          styles.paginationButton,
-          currentPage === 1 && styles.disabledButton,
-        ]}
-        onPress={onPrevious}
-        disabled={currentPage === 1}
-      >
-        <Text style={styles.paginationButtonText}>Previous</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.paginationText}>
-        Page {currentPage} of {totalPages}
-      </Text>
-
-      <TouchableOpacity
-        style={[
-          styles.paginationButton,
-          currentPage === totalPages && styles.disabledButton,
-        ]}
-        onPress={onNext}
-        disabled={currentPage === totalPages}
-      >
-        <Text style={styles.paginationButtonText}>Next</Text>
-      </TouchableOpacity>
-    </View>
-  );
-};
-
-export default function TabTwoScreen() {
+export default function ExploreScreen() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [allRestaurants, setAllRestaurants] = useState<Restaurant[]>([]);
-  const baseApiURL = "https://api.dinver.eu/api/app/restaurants/sample";
+  const [allPagesLoaded, setAllPagesLoaded] = useState(false);
 
-  const fetchData = async (page: number) => {
-    setLoading(true);
+  const loadData = async (page: number, isLoadingMore = false) => {
+    if (isLoadingMore) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+
     try {
-      const apiURL = `${baseApiURL}?page=${page}`;
-      const response = await axios.get(apiURL);
-      console.log(response.data);
-      setData(response.data);
+      const responseData = await fetchRestaurants(page);
+      // console.log(responseData); provjera u konzoli
+      setData(responseData);
 
       if (page === 1) {
-        setAllRestaurants(response.data.restaurants);
+        setAllRestaurants(responseData.restaurants);
+        setAllPagesLoaded(responseData.totalPages === 1);
       } else {
-        setAllRestaurants((prev) => [...prev, ...response.data.restaurants]);
+        setAllRestaurants((prev) => [...prev, ...responseData.restaurants]);
+        setAllPagesLoaded(page >= responseData.totalPages);
       }
-    } catch (error: any) {
+
+      // Update current page to match what was loaded
+      setCurrentPage(responseData.currentPage);
+    } catch (error) {
       console.log(error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    fetchData(currentPage);
-  }, [currentPage]);
+    loadData(currentPage);
+  }, []);
+
+  const loadNextPage = () => {
+    if (
+      data &&
+      currentPage < data.totalPages &&
+      !loadingMore &&
+      !allPagesLoaded
+    ) {
+      loadData(currentPage + 1, true);
+    }
+  };
 
   const goToNextPage = () => {
     if (data && currentPage < data.totalPages) {
-      setCurrentPage(currentPage + 1);
+      loadData(currentPage + 1);
     }
   };
 
   const goToPreviousPage = () => {
     if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
+      loadData(currentPage - 1);
     }
   };
 
@@ -141,12 +89,18 @@ export default function TabTwoScreen() {
 
   const filteredRestaurants =
     searchQuery.trim() === ""
-      ? data?.restaurants || []
+      ? allRestaurants
       : allRestaurants.filter(
           (restaurant) =>
             restaurant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             restaurant.address.toLowerCase().includes(searchQuery.toLowerCase())
         );
+
+  const handleEndReached = () => {
+    if (searchQuery.trim() === "") {
+      loadNextPage();
+    }
+  };
 
   let content;
   if (loading && !data) {
@@ -163,8 +117,12 @@ export default function TabTwoScreen() {
         {filteredRestaurants.length > 0 ? (
           <FlatList
             data={filteredRestaurants}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <RestaurantItem item={item} />}
+            keyExtractor={(item: Restaurant) => item.id}
+            renderItem={({ item }: { item: Restaurant }) => (
+              <RestaurantItem item={item} />
+            )}
+            onEndReached={handleEndReached}
+            onEndReachedThreshold={0.3}
             ListHeaderComponent={
               <View style={styles.header}>
                 <Text style={styles.headerTitle}>
@@ -173,11 +131,23 @@ export default function TabTwoScreen() {
                 <Text style={styles.headerSubtitle}>
                   {searchQuery.trim() !== ""
                     ? `Found ${filteredRestaurants.length} restaurants matching "${searchQuery}"`
-                    : `Showing ${data.restaurants.length} of ${data.totalRestaurants} restaurants`}
+                    : `Showing ${allRestaurants.length} of ${data.totalRestaurants} restaurants`}
                 </Text>
               </View>
             }
-            ListFooterComponent={<View style={{ height: 80 }} />}
+            ListFooterComponent={
+              <>
+                {loadingMore && (
+                  <View style={styles.loadingMoreContainer}>
+                    <ActivityIndicator size="small" color="#0000ff" />
+                    <Text style={styles.loadingMoreText}>
+                      Loading more restaurants...
+                    </Text>
+                  </View>
+                )}
+                <View style={{ height: 80 }} />
+              </>
+            }
           />
         ) : (
           <View style={styles.noResultsContainer}>
@@ -197,10 +167,11 @@ export default function TabTwoScreen() {
         {searchQuery.trim() === "" && (
           <View style={styles.paginationFooter}>
             <PaginationControls
-              currentPage={data.currentPage}
+              currentPage={currentPage}
               totalPages={data.totalPages}
               onPrevious={goToPreviousPage}
               onNext={goToNextPage}
+              disabled={allPagesLoaded}
             />
           </View>
         )}
@@ -232,55 +203,11 @@ const styles = StyleSheet.create({
     color: "#666",
     marginBottom: 8,
   },
-  restaurantItem: {
-    flexDirection: "row",
-    backgroundColor: "white",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  restaurantImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  restaurantInfo: {
-    flex: 1,
-    justifyContent: "space-between",
-  },
-  restaurantName: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  restaurantAddress: {
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 8,
-  },
-  ratingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  rating: {
-    fontSize: 14,
-    fontWeight: "bold",
-    marginRight: 4,
-  },
-  ratingCount: {
-    fontSize: 12,
-    color: "#666",
-  },
   errorText: {
     fontSize: 16,
     color: "red",
     textAlign: "center",
+    marginTop: 70,
   },
   paginationFooter: {
     position: "absolute",
@@ -290,28 +217,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderTopWidth: 1,
     borderTopColor: "#e0e0e0",
-  },
-  paginationContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-  },
-  paginationButton: {
-    backgroundColor: "#007bff",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 4,
-  },
-  disabledButton: {
-    backgroundColor: "#cccccc",
-  },
-  paginationButtonText: {
-    color: "white",
-    fontWeight: "bold",
-  },
-  paginationText: {
-    fontSize: 14,
   },
   noResultsContainer: {
     flex: 1,
@@ -335,5 +240,16 @@ const styles = StyleSheet.create({
   clearSearchButtonText: {
     color: "white",
     fontWeight: "bold",
+  },
+  loadingMoreContainer: {
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+  },
+  loadingMoreText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#666",
   },
 });
